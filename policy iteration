@@ -1,0 +1,94 @@
+# Random Policy로 Policy Evaluation 구현 (frozen_lake) 수정하여
+# Value Iteration - Policy Iteration
+
+import gym
+from gym.envs.toy_text.frozen_lake import generate_random_map
+import numpy as np
+import copy
+
+# FrozenLake 환경 생성
+env = gym.make('FrozenLake-v1',  map_name="4x4", is_slippery=True, render_mode="human")  # is_slippery=False 이면, 경로 확인
+
+# num 저장
+num_states = env.observation_space.n
+num_actions = env.action_space.n
+
+
+# 매개변수 설정
+gamma = 0.9  # 할인율, 전역 변수
+
+# 변수 초기화
+V = np.zeros([env.observation_space.n])
+# V2 = np.zeros([env.observation_space.n])
+
+# 임의의 초기 정책 설정(각 상태에서 모든 행동을 동일한 확률로 선택)
+# policy = np.ones((num_states, num_actions)) / num_actions
+
+
+# 초기 정책을 랜덤하게 설정 (더 나은 초기화 방법을 고려할 수 있음)
+policy = np.random.rand(num_states, num_actions)
+policy /= policy.sum(axis=1, keepdims=True)         # 
+
+
+
+# 환경 초기화
+state = env.reset()
+# 화면에 시각화
+env.render()
+
+# 정책 평가 함수
+def policy_evaluation(policy, V, gamma=0.9, theta=0.0001):
+    while True:
+        delta = 0
+        V2 = copy.deepcopy(V)                   # V2에 V의 값 직접복사, V2[next_state]에서 사용
+        V = np.zeros([env.observation_space.n]) # 초기화
+
+        for s in range(num_states):
+            for a, action_prob in enumerate(policy[s]):
+                for prob, next_state, reward, done in env.P[s][a]:
+                    V[s] += action_prob * prob * (reward + gamma * V2[next_state])
+            
+            delta = max(delta, abs(V2[s]-V[s]))
+            # delta = max(delta, abs(np.sum(V)-np.sum(V[s])))
+            # print(prob, action_prob, next_state, reward)
+            # print(V2[s], V[s], delta)
+        print('delta',delta)
+
+        if delta < theta:
+            break
+    return V
+
+# 정책 개선 함수
+def policy_improvement(policy, V):
+    policy_stable = True
+    for s in range(num_states):
+         # 이전 최적 행동 저장
+        old_action = np.argmax(policy[s])   ## 확인필요
+        # old_action = np.argmax(policy[s])   ## 확인필요
+        
+        # 새로운 최적 행동 계산
+        action_values = [sum([prob * (reward + gamma * V[next_state]) for prob, next_state, reward, done in env.P[s][a]]) for a in range(num_actions)]
+        new_action = np.argmax(action_values)
+
+
+        # 정책 업데이트 (0, 1 값으로만 업데이트)
+        policy[s] = np.zeros(num_actions)
+        policy[s][new_action] = 1
+
+
+        if old_action != new_action:
+            policy_stable = False
+            policy[s] = np.eye(num_actions)[new_action]# np.eye 단위행렬 생성 ## 확인필요
+            
+        # print(4)
+    return policy, policy_stable
+
+# 정책 반복
+while True:
+    V = policy_evaluation(policy, V)
+    policy, policy_stable = policy_improvement(policy, V)
+    if policy_stable:
+        break
+
+print("최종 정책:", policy)
+print("최종 가치 함수:", V)
